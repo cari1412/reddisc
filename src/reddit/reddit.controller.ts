@@ -20,12 +20,23 @@ export class RedditController {
   @Get('top')
   async getTopPosts(
     @Query('subreddit') subreddit: string,
-    @Query('timeframe') timeframe?: string,
+    @Query('timeframe') timeframe?: 'hour' | 'day' | 'week' | 'month' | 'year' | 'all',
     @Query('limit') limit?: number,
   ) {
     return await this.redditService.getTopPosts(
       subreddit,
       timeframe || 'day',
+      limit ? parseInt(limit.toString()) : 25,
+    );
+  }
+
+  @Get('new')
+  async getNewPosts(
+    @Query('subreddit') subreddit: string,
+    @Query('limit') limit?: number,
+  ) {
+    return await this.redditService.getNewPosts(
+      subreddit,
       limit ? parseInt(limit.toString()) : 25,
     );
   }

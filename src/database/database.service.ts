@@ -12,6 +12,10 @@ export class DatabaseService implements OnModuleInit {
     const supabaseUrl = this.configService.get<string>('supabase.url');
     const supabaseKey = this.configService.get<string>('supabase.key');
     
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase credentials are not properly configured');
+    }
+    
     this.supabase = createClient(supabaseUrl, supabaseKey);
   }
 
