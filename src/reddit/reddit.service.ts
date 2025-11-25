@@ -1,53 +1,40 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import Snoowrap from 'snoowrap';
+import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import axios from 'axios';
 
 @Injectable()
-export class RedditService implements OnModuleInit {
-  private reddit: Snoowrap;
+export class RedditService {
+  private readonly baseUrl = 'https://www.reddit.com';
+  private readonly headers = {
+    'User-Agent': 'Mozilla/5.0 (compatible; RedditScraper/1.0)',
+  };
 
-  constructor(
-    private configService: ConfigService,
-    private databaseService: DatabaseService,
-  ) {}
+  constructor(private databaseService: DatabaseService) {}
 
-  onModuleInit() {
-    const userAgent = this.configService.get<string>('reddit.userAgent');
-    const clientId = this.configService.get<string>('reddit.clientId');
-    const clientSecret = this.configService.get<string>('reddit.clientSecret');
-    const username = this.configService.get<string>('reddit.username');
-    const password = this.configService.get<string>('reddit.password');
-
-    if (!userAgent || !clientId || !clientSecret || !username || !password) {
-      throw new Error('Reddit credentials are not properly configured');
-    }
-
-    this.reddit = new Snoowrap({
-      userAgent,
-      clientId,
-      clientSecret,
-      username,
-      password,
-    });
+  private async delay(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   async scrapeSubreddit(subredditName: string, limit = 25) {
     try {
-      const subreddit = this.reddit.getSubreddit(subredditName);
-      const posts = await subreddit.getHot({ limit } as any);
-
+      await this.delay(1000); // Rate limiting
+      
+      const url = `${this.baseUrl}/r/${subredditName}/hot.json?limit=${limit}`;
+      const response = await axios.get(url, { headers: this.headers });
+      
+      const posts = response.data.data.children;
       const savedPosts: any[] = [];
 
-      for (const post of posts) {
+      for (const item of posts) {
+        const post = item.data;
         const existingPost = await this.databaseService.getPostById(post.id);
 
         if (!existingPost) {
           const postData = {
             id: post.id,
             title: post.title,
-            author: post.author?.name || 'deleted',
-            subreddit: post.subreddit?.display_name || subredditName,
+            author: post.author || 'deleted',
+            subreddit: post.subreddit,
             score: post.score,
             url: post.url,
             created_utc: post.created_utc,
@@ -75,20 +62,24 @@ export class RedditService implements OnModuleInit {
 
   async getTopPosts(subredditName: string, timeframe: 'hour' | 'day' | 'week' | 'month' | 'year' | 'all' = 'day', limit = 25) {
     try {
-      const subreddit = this.reddit.getSubreddit(subredditName);
-      const posts = await subreddit.getTop({ time: timeframe, limit } as any);
-
+      await this.delay(1000);
+      
+      const url = `${this.baseUrl}/r/${subredditName}/top.json?t=${timeframe}&limit=${limit}`;
+      const response = await axios.get(url, { headers: this.headers });
+      
+      const posts = response.data.data.children;
       const savedPosts: any[] = [];
 
-      for (const post of posts) {
+      for (const item of posts) {
+        const post = item.data;
         const existingPost = await this.databaseService.getPostById(post.id);
 
         if (!existingPost) {
           const postData = {
             id: post.id,
             title: post.title,
-            author: post.author?.name || 'deleted',
-            subreddit: post.subreddit?.display_name || subredditName,
+            author: post.author || 'deleted',
+            subreddit: post.subreddit,
             score: post.score,
             url: post.url,
             created_utc: post.created_utc,
@@ -117,21 +108,20 @@ export class RedditService implements OnModuleInit {
 
   async searchPosts(subredditName: string, query: string, limit = 25) {
     try {
-      const subreddit = this.reddit.getSubreddit(subredditName);
-      const searchResults = await subreddit.search({
-        query,
-        sort: 'relevance',
-        limit,
-      } as any);
-
+      await this.delay(1000);
+      
+      const url = `${this.baseUrl}/r/${subredditName}/search.json?q=${encodeURIComponent(query)}&restrict_sr=1&limit=${limit}&sort=relevance`;
+      const response = await axios.get(url, { headers: this.headers });
+      
+      const posts = response.data.data.children;
       const results: any[] = [];
 
-      for (let i = 0; i < Math.min(searchResults.length, limit); i++) {
-        const post = searchResults[i];
+      for (const item of posts) {
+        const post = item.data;
         results.push({
           id: post.id,
           title: post.title,
-          author: post.author?.name || 'deleted',
+          author: post.author || 'deleted',
           score: post.score,
           url: post.url,
           created_utc: post.created_utc,
@@ -149,20 +139,24 @@ export class RedditService implements OnModuleInit {
 
   async getNewPosts(subredditName: string, limit = 25) {
     try {
-      const subreddit = this.reddit.getSubreddit(subredditName);
-      const posts = await subreddit.getNew({ limit } as any);
-
+      await this.delay(1000);
+      
+      const url = `${this.baseUrl}/r/${subredditName}/new.json?limit=${limit}`;
+      const response = await axios.get(url, { headers: this.headers });
+      
+      const posts = response.data.data.children;
       const savedPosts: any[] = [];
 
-      for (const post of posts) {
+      for (const item of posts) {
+        const post = item.data;
         const existingPost = await this.databaseService.getPostById(post.id);
 
         if (!existingPost) {
           const postData = {
             id: post.id,
             title: post.title,
-            author: post.author?.name || 'deleted',
-            subreddit: post.subreddit?.display_name || subredditName,
+            author: post.author || 'deleted',
+            subreddit: post.subreddit,
             score: post.score,
             url: post.url,
             created_utc: post.created_utc,
